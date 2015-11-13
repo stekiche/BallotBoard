@@ -27,4 +27,14 @@
   <div class="Container">
     <p>Welcome to your profile</p>
   </div>
+
+  @(myForm: Form[User])
+
+@helper.form(action = routes.Application.submit) {
+    
+    @helper.inputText(myForm("username"))
+    
+    @helper.inputPassword(myForm("password"))
+    
+}
 }

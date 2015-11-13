@@ -20,10 +20,28 @@ public class Application extends Controller {
     }
 
     public Result newballot() {
+        val form = Form(
+            tuple(
+              "ballot_title" -> text,
+              "description" -> text,
+            )
+          )
+
         return ok(newballot.render("No ballots to view right now"));
     }
 
     public Result newprofile() {
+        val form = Form(
+            tuple(
+      "username" -> text,
+      "password" -> text
+    )
+  )
         return ok(newprofile.render("No ballots to view right now"));
     }
+
+    def submit = Action { implicit request =>
+    val (fname, lname) = form.bindFromRequest.get
+    Ok("Hi %s".format(fname, lname))
+  }
 }
