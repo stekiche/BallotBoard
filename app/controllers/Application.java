@@ -1,47 +1,211 @@
 package controllers;
 
+import models.Ballot;
+import models.User;
+import org.bson.types.ObjectId;
 import play.mvc.Controller;
 import play.mvc.Result;
+import play.data.*;
+import static play.data.Form.*;
+
+import play.mvc.Security;
 import views.html.*;
-import models.User;
 
 public class Application extends Controller {
 
-    public Result index() {
+    private String currentUser = "";
+    /**
+     * Handles requests to /login route
+     * @return login form
+     */
+    public Result login() {
+        return ok(login.render(form(Login.class)));
+    }
+
+    /**
+     * Logs out current user
+     * @return
+     */
+    public Result logout() {
+        session().clear();
+        flash("success", "You've been logged out");
+        currentUser = "";
+        return redirect(
+                routes.Application.login()
+        );
+    }
+    /**
+     * Authenticates a user
+     * @return
+     */
+    public Result authenticate() {
+
+        Form<Login> loginForm = form(Login.class).bindFromRequest();
+
+        if (loginForm.hasErrors()) {
+            return badRequest(login.render(loginForm));
+        } else {
+            session().clear();
+            session("email", loginForm.get().email);
+            currentUser = loginForm.get().email;
+            return redirect(
+                    routes.Application.ballot()
+            );
+        }
+    }
+
+    /**
+     * Creates a new user
+     * @return
+     */
+    public Result register() {
+        Form<SignUp> signUpForm = form(SignUp.class).bindFromRequest();
+
+        if (signUpForm.hasErrors()) {
+            return badRequest(signup.render(signUpForm));
+        } else {
+            User newUser = new User();
+            newUser.create(signUpForm.get().username, signUpForm.get().fullname,
+                    signUpForm.get().email, signUpForm.get().password);
+            newUser.insert();
+            session().clear();
+            // session("username", signUpForm.get().username);
+            session("email", signUpForm.get().email);
+            currentUser = signUpForm.get().email;
+            return redirect(
+                    routes.Application.ballot()
+            );
+        }
+    }
+
+    /**
+     * Handles request to the main page /index
+     * @return
+     */
+    public Result index () {
         return ok(index.render("Welcome to BallotBoard"));
     }
 
-    public Result profile() {
-        return ok(profile.render("Welcome to your profile"));
+    /**
+     * Handles requests to /signup for creation of new accounts
+     * @return
+     */
+    public Result signup() {
+        return ok(signup.render(form(SignUp.class)));
+    }
+
+    /**
+     * Create a new ballot
+     * @return
+     */
+    @Security.Authenticated(Secured.class)
+    public Result create() {
+        Form<BallotForm> bForm = form(BallotForm.class).bindFromRequest();
+
+        if (bForm.hasErrors()) {
+            return badRequest(ballotForm.render(bForm));
+        } else {
+            Ballot tmp = new Ballot();
+            tmp.create(bForm.get().ballotName, bForm.get().description, request().username());
+            tmp.insert();
+            return redirect(
+                    routes.Application.ballot()
+            );
+        }
+    }
+
+    /**
+     *
+     * @return
+     */
+    @Security.Authenticated(Secured.class)
+    public Result ballotForm() {
+        return ok(ballotForm.render(form(BallotForm.class)));
+    }
+
+    // /**
+    //  * Vote on a ballot
+    //  * @return
+    //  */
+    // @Security.Authenticated(Secured.class)
+    // public Result vote(String id) {
+
+    // }
+
+    /**
+     * Handles /user route
+     * @return
+     */
+    @Security.Authenticated(Secured.class)
+    public Result user() {
+        return ok(profile.render(Ballot.findAll(), Ballot.findAll(), request().username()));
     }
 
     public Result ballot() {
-        return ok(ballot.render("No ballots to view right now"));
+        return ok(ballot.render(Ballot.findAll(), currentUser));
     }
 
-    public Result newballot() {
-        val form = Form(
-            tuple(
-              "ballot_title" -> text,
-              "description" -> text,
-            )
-          )
-
-        return ok(newballot.render("No ballots to view right now"));
+    @Security.Authenticated(Secured.class)
+    public Result ballotView(String id) {
+        ObjectId ballotId = new ObjectId(id);
+        return ok(ballotView.render(Ballot.findById(ballotId), currentUser));
     }
 
-    public Result newprofile() {
-        val form = Form(
-            tuple(
-      "username" -> text,
-      "password" -> text
-    )
-  )
-        return ok(newprofile.render("No ballots to view right now"));
+    /**
+     * Form that holds login email and password
+     */
+    public static class Login {
+
+        public String email;
+        public String password;
+        /**
+         * Validates user's input on sign in
+         * @return
+         */
+        public String validate() {
+            if (User.authenticate(email, password)) {
+                return null;
+            }
+            return "Invalid Email and/or Password";
+        }
+
     }
 
-    def submit = Action { implicit request =>
-    val (fname, lname) = form.bindFromRequest.get
-    Ok("Hi %s".format(fname, lname))
-  }
+    /**
+     * Form to store information entered by a new user
+     */
+    public static class SignUp {
+
+        public String email;
+        public String fullname;
+        public String username;
+        public String password;
+
+        /**
+         * Checks if an email or username is already taken
+         * @return
+         */
+        public String validate() {
+            if (User.exists(email, username)) {
+                return "Email and/or Username already taken";
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Form for a creating a new Ballot
+     */
+    public static class BallotForm {
+
+        public String ballotName;
+        public String description;
+
+        public String validate() {
+            if (Ballot.exists(ballotName, description)) {
+                return "It appears you are trying to create a ballot that already exists!";
+            }
+            return null;
+        }
+    }
 }
